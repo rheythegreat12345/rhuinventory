@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AuthController extends Controller
@@ -17,12 +19,22 @@ class AuthController extends Controller
 
     public function store(Request $request, AuditService $auditService): RedirectResponse
     {
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email'))),
+        ]);
+
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
         if (! Auth::attempt([...$credentials, 'status' => 'active'], $request->boolean('remember'))) {
+            $pendingUser = User::query()->where('email', $credentials['email'])->where('status', 'inactive')->first();
+
+            if ($pendingUser && Auth::validate($credentials)) {
+                return back()->with('error', 'Your account is waiting for administrator approval. You will be able to sign in after it is approved.')->onlyInput('email');
+            }
+
             return back()->withErrors(['email' => 'The email, password, or account status is invalid.'])->onlyInput('email');
         }
 

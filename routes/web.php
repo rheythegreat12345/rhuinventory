@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminAccountController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -52,7 +53,7 @@ Route::middleware('auth')->group(function (): void {
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'password'])->name('profile.password');
 
-    Route::get('/search', [SearchController::class, 'index'])->name('search');
+    Route::get('/search', [SearchController::class, 'index'])->middleware('permission:medicines.view')->name('search');
     Route::get('/scanner', [SearchController::class, 'scanner'])->name('scanner');
     Route::post('/scanner', [SearchController::class, 'barcode'])->name('scanner.lookup');
     Route::get('/scanner/register', [SearchController::class, 'showScannerRegister'])->name('scanner.register');
@@ -72,6 +73,7 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/medicines/import', [MedicineController::class, 'import'])->name('medicines.import');
     });
     Route::middleware('permission:medicines.edit')->group(function (): void {
+        Route::delete('/medicines/bulk', [MedicineController::class, 'bulkArchive'])->name('medicines.bulk-archive');
         Route::get('/medicines/{medicine}/edit', [MedicineController::class, 'edit'])->name('medicines.edit');
         Route::put('/medicines/{medicine}', [MedicineController::class, 'update'])->name('medicines.update');
         Route::delete('/medicines/{medicine}', [MedicineController::class, 'destroy'])->name('medicines.destroy');
@@ -95,19 +97,23 @@ Route::middleware('auth')->group(function (): void {
 
     Route::resource('categories', MedicineCategoryController::class)->parameters(['categories' => 'category'])->middleware('permission:categories.manage');
     Route::resource('suppliers', SupplierController::class)->middleware('permission:suppliers.manage');
-    Route::resource('users', UserController::class)->middleware('permission:users.manage');
-    Route::get('/roles', [RoleController::class, 'index'])->middleware('permission:users.manage')->name('roles.index');
-    Route::put('/roles/{role}', [RoleController::class, 'update'])->middleware('permission:users.manage')->name('roles.update');
+    Route::get('/admin/accounts', [AdminAccountController::class, 'index'])->middleware('administrator')->name('admin.accounts.index');
+    Route::put('/admin/accounts/{user}/password', [AdminAccountController::class, 'resetPassword'])->middleware('administrator')->name('admin.accounts.password.reset');
+    Route::put('/users/{user}/approve', [UserController::class, 'approve'])->middleware('administrator')->name('users.approve');
+    Route::resource('users', UserController::class)->middleware('administrator');
+    Route::get('/roles', [RoleController::class, 'index'])->middleware('administrator')->name('roles.index');
+    Route::put('/roles/{role}', [RoleController::class, 'update'])->middleware('administrator')->name('roles.update');
 
     Route::get('/reports', [ReportController::class, 'index'])->middleware('permission:reports.view')->name('reports.index');
     Route::get('/reports/export/{format}', [ReportController::class, 'export'])->middleware('permission:reports.export')->name('reports.export');
     Route::get('/analytics', AnalyticsController::class)->middleware('permission:analytics.view')->name('analytics');
-    Route::get('/audit-logs', [ReportController::class, 'auditLogs'])->middleware('permission:audit.view')->name('audit.index');
+    Route::get('/audit-logs', [ReportController::class, 'auditLogs'])->middleware('administrator')->name('audit.index');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
-    Route::get('/settings', [SettingController::class, 'edit'])->middleware('permission:settings.manage')->name('settings.edit');
-    Route::put('/settings', [SettingController::class, 'update'])->middleware('permission:settings.manage')->name('settings.update');
+    Route::get('/settings', [SettingController::class, 'edit'])->middleware('administrator')->name('settings.edit');
+    Route::put('/settings', [SettingController::class, 'update'])->middleware('administrator')->name('settings.update');
 });

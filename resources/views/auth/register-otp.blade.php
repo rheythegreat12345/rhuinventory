@@ -8,7 +8,7 @@
         </svg>
     </div>
     <h1>Verify Your Email</h1>
-    <p style="color: var(--muted);">We've sent a 6-digit verification code to <strong>{{ session('registration_data.email') ?? 'your email' }}</strong></p>
+    <p style="color: var(--muted);">We've sent a 6-digit verification code to <strong>{{ session('registration_data.email') ?? 'your email' }}</strong>. Your request will be sent to an administrator for approval after verification.</p>
 </div>
 
 <form class="auth-form" data-auth-form method="POST" action="{{ route('register.verify-otp') }}">
@@ -31,7 +31,7 @@
         @enderror
     </div>
 
-    <button class="btn btn-primary auth-submit" type="submit"><span>Verify & Create Account</span><span class="button-spinner" aria-hidden="true"></span></button>
+    <button class="btn btn-primary auth-submit" type="submit"><span>Verify & Submit Request</span><span class="button-spinner" aria-hidden="true"></span></button>
 </form>
 
 <div style="margin: 16px 0; text-align: center;">

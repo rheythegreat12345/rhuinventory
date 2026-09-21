@@ -11,6 +11,7 @@ use App\Services\AuditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class UserController extends Controller
@@ -96,17 +97,44 @@ class UserController extends Controller
     }
 
     /**
+     * Approve a pending user account.
+     */
+    public function approve(User $user, AuditService $auditService): RedirectResponse
+    {
+        if ($user->status === 'active') {
+            return redirect()->route('users.show', $user)->with('success', 'User account is already active.');
+        }
+
+        $user->update(['status' => 'active']);
+        $auditService->record('user_approved', "Approved user account for {$user->name}.", $user, ['status' => 'inactive'], ['status' => 'active']);
+
+        return redirect()->route('users.show', $user)->with('success', 'User account approved. The staff member can now sign in.');
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(User $user, Request $request, AuditService $auditService): RedirectResponse
     {
         if ($request->user()->is($user)) {
-            return back()->with('error', 'You cannot deactivate your own account.');
+            return back()->with('error', 'You cannot delete your own account.');
         }
 
-        $user->update(['status' => 'inactive']);
-        $auditService->record('user_deactivated', "Deactivated user account for {$user->name}.", $user, ['status' => 'active'], ['status' => 'inactive']);
+        $isLastActiveAdministrator = $user->status === 'active'
+            && $user->role?->slug === 'administrator'
+            && User::query()->where('status', 'active')->whereHas('role', fn ($query) => $query->where('slug', 'administrator'))->count() === 1;
 
-        return redirect()->route('users.index')->with('success', 'User account deactivated.');
+        if ($isLastActiveAdministrator) {
+            return back()->with('error', 'You cannot delete the last active Administrator account.');
+        }
+
+        $oldValues = Arr::except($user->toArray(), ['password']);
+
+        DB::transaction(function () use ($auditService, $oldValues, $user): void {
+            $auditService->record('user_deleted', "Deleted user account for {$user->name}.", $user, $oldValues);
+            $user->delete();
+        });
+
+        return redirect()->route('users.index')->with('success', 'User account deleted.');
     }
 }

@@ -38,11 +38,10 @@ class AppServiceProvider extends ServiceProvider
             $view->with('systemSettings', $systemSettings);
 
             if (auth()->check() && Schema::hasTable('inventory_notifications')) {
-                $notificationQuery = InventoryNotification::query()
-                    ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', auth()->id()));
+                $notificationQuery = InventoryNotification::query()->visibleTo(auth()->user());
 
-                $view->with('layoutNotifications', (clone $notificationQuery)->latest()->limit(6)->get());
-                $view->with('unreadNotificationCount', (clone $notificationQuery)->whereNull('read_at')->count());
+                $view->with('layoutNotifications', (clone $notificationQuery)->unreadFor(auth()->user())->withReadStateFor(auth()->user())->latest()->limit(6)->get());
+                $view->with('unreadNotificationCount', (clone $notificationQuery)->unreadFor(auth()->user())->count());
             }
         });
     }

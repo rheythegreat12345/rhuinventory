@@ -32,9 +32,9 @@
                     @error('quantity')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">
-                    <label for="recipient">Recipient</label>
-                    <input class="input" id="recipient" name="recipient" value="{{ old('recipient') }}" placeholder="Patient name or department">
-                    <div class="help-text">Who is receiving this medicine?</div>
+                    <label class="required" for="recipient">Patient name or recipient</label>
+                    <input class="input" id="recipient" name="recipient" value="{{ old('recipient') }}" required placeholder="Enter patient name or department">
+                    <div class="help-text">Required so this dispensing can be traced safely.</div>
                     @error('recipient')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">

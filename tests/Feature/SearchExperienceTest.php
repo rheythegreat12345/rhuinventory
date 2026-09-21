@@ -27,6 +27,15 @@ test('global search returns matching live results', function () {
         ->assertJsonMissing(['label' => 'Ibuprofen']);
 });
 
+test('global search is unavailable to users without medicine viewing permission', function () {
+    $user = userWithPermissions();
+    Medicine::factory()->create(['generic_name' => 'Restricted Medicine']);
+
+    $this->actingAs($user)
+        ->getJson(route('search', ['q' => 'Restricted']))
+        ->assertForbidden();
+});
+
 test('dashboard keeps statistic text separated without a header search bar', function () {
     $user = userWithPermissions();
 

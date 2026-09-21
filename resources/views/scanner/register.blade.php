@@ -58,28 +58,18 @@
                     @error('medicine_category_id')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">
-                    <label class="required" for="dosage_form">Dosage form</label>
-                    <select class="select" id="dosage_form" name="dosage_form" required>
-                        <option value="">Choose form</option>
-                        @foreach(['Tablet', 'Capsule', 'Syrup', 'Suspension', 'Powder sachet', 'Ampoule', 'Vial', 'Cream', 'Ointment', 'Drops', 'Inhaler'] as $form)
-                            <option value="{{ $form }}" @selected(old('dosage_form') === $form)>{{ $form }}</option>
-                        @endforeach
-                    </select>
-                    @error('dosage_form')<div class="error-text">{{ $message }}</div>@enderror
-                </div>
-                <div class="field">
-                    <label for="dosage">Dosage / instructions</label>
-                    <input class="input" id="dosage" name="dosage" value="{{ old('dosage') }}" placeholder="e.g. 1 tablet">
-                    @error('dosage')<div class="error-text">{{ $message }}</div>@enderror
-                </div>
-                <div class="field">
                     <label for="strength">Strength</label>
                     <input class="input" id="strength" name="strength" value="{{ old('strength') }}" placeholder="e.g. 500 mg">
                     @error('strength')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">
                     <label class="required" for="unit">Inventory unit</label>
-                    <input class="input" id="unit" name="unit" value="{{ old('unit') }}" required placeholder="tablets, bottles, vials">
+                    <select class="select" id="unit" name="unit" required>
+                        <option value="">Choose unit</option>
+                        @foreach(['Tablets', 'Capsules', 'Bottles', 'Vials', 'Ampoules', 'Sachets', 'Tubes', 'Drops', 'Inhalers', 'Boxes'] as $unit)
+                            <option value="{{ $unit }}" @selected(old('unit') === $unit)>{{ $unit }}</option>
+                        @endforeach
+                    </select>
                     @error('unit')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
             </div>
@@ -102,14 +92,14 @@
                     @error('quantity')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">
-                    <label class="required" for="storage_location_id">Storage location</label>
-                    <select class="select" id="storage_location_id" name="storage_location_id" required>
-                        <option value="">Choose location</option>
-                        @foreach($storageLocations as $location)
-                            <option value="{{ $location->id }}" @selected((string)old('storage_location_id') === (string)$location->id)>{{ $location->name }} ({{ $location->code }})</option>
+                    <label class="required" for="supplier_id">Supplier</label>
+                    <select class="select" id="supplier_id" name="supplier_id" required>
+                        <option value="">Choose supplier</option>
+                        @foreach($suppliers as $supplier)
+                            <option value="{{ $supplier->id }}" @selected((string) old('supplier_id') === (string) $supplier->id)>{{ $supplier->name }} ({{ $supplier->code }})</option>
                         @endforeach
                     </select>
-                    @error('storage_location_id')<div class="error-text">{{ $message }}</div>@enderror
+                    @error('supplier_id')<div class="error-text">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">
                     <label class="required" for="expiration_date">Expiration date</label>
@@ -145,45 +135,6 @@
                     <label for="minimum_stock_level">Minimum stock</label>
                     <input class="input" id="minimum_stock_level" name="minimum_stock_level" type="number" min="0" value="{{ old('minimum_stock_level', 10) }}" placeholder="10">
                     @error('minimum_stock_level')<div class="error-text">{{ $message }}</div>@enderror
-                </div>
-                <div class="field">
-                    <label for="maximum_stock_level">Maximum / target stock</label>
-                    <input class="input" id="maximum_stock_level" name="maximum_stock_level" type="number" min="0" value="{{ old('maximum_stock_level', 100) }}" placeholder="100">
-                    @error('maximum_stock_level')<div class="error-text">{{ $message }}</div>@enderror
-                </div>
-                <div class="field span-2">
-                    <label for="storage_condition">Storage condition</label>
-                    <input class="input" id="storage_condition" name="storage_condition" value="{{ old('storage_condition') }}" placeholder="Store below 30°C in a dry place">
-                    @error('storage_condition')<div class="error-text">{{ $message }}</div>@enderror
-                </div>
-            </div>
-        </div>
-    </div>
-
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <h2 class="card-title">Stock thresholds</h2>
-                    <p class="card-subtitle">Used for alerts and reorder recommendations.</p>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="form-grid">
-                    <div class="field">
-                        <label for="minimum_stock_level">Minimum stock</label>
-                        <input class="input" id="minimum_stock_level" name="minimum_stock_level" type="number" min="0" value="{{ old('minimum_stock_level', 10) }}" placeholder="10">
-                        @error('minimum_stock_level')<div class="error-text">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="field">
-                        <label for="maximum_stock_level">Maximum / target stock</label>
-                        <input class="input" id="maximum_stock_level" name="maximum_stock_level" type="number" min="0" value="{{ old('maximum_stock_level', 100) }}" placeholder="100">
-                        @error('maximum_stock_level')<div class="error-text">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="field span-2">
-                        <label for="storage_condition">Storage condition</label>
-                        <input class="input" id="storage_condition" name="storage_condition" value="{{ old('storage_condition') }}" placeholder="Store below 30°C in a dry place">
-                        @error('storage_condition')<div class="error-text">{{ $message }}</div>@enderror
-                    </div>
                 </div>
             </div>
         </div>

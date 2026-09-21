@@ -15,9 +15,11 @@ class Medicine extends Model
     /** @use HasFactory<MedicineFactory> */
     use HasFactory, SoftDeletes;
 
+    public const MINIMUM_UNITS_FOR_BOX_RELEASE = 100;
+
     protected $fillable = [
         'medicine_category_id', 'medicine_code', 'barcode', 'generic_name', 'brand_name',
-        'dosage', 'strength', 'dosage_form', 'unit', 'minimum_stock_level',
+        'dosage', 'strength', 'dosage_form', 'unit', 'box_size', 'minimum_stock_level',
         'maximum_stock_level', 'reorder_level', 'unit_cost', 'reference_price',
         'storage_condition', 'description', 'status',
     ];
@@ -25,6 +27,7 @@ class Medicine extends Model
     protected function casts(): array
     {
         return [
+            'box_size' => 'integer',
             'unit_cost' => 'decimal:2',
             'reference_price' => 'decimal:2',
         ];
@@ -71,7 +74,7 @@ class Medicine extends Model
 
     public function stockStatus(): string
     {
-        $stock = (int) ($this->current_stock ?? $this->batches()->sum('quantity'));
+        $stock = $this->usableStockQuantity();
 
         if ($stock === 0) {
             return 'out';
@@ -90,6 +93,47 @@ class Medicine extends Model
 
     public function recommendedReorderQuantity(): int
     {
-        return max(0, $this->maximum_stock_level - (int) ($this->current_stock ?? $this->batches()->sum('quantity')));
+        return max(0, $this->maximum_stock_level - $this->usableStockQuantity());
+    }
+
+    public function usableStockQuantity(): int
+    {
+        return (int) ($this->usable_stock ?? $this->batches()->availableFefo()->sum('quantity'));
+    }
+
+    public function unitsPerBox(): ?int
+    {
+        return $this->box_size;
+    }
+
+    public function scannableBarcodeValue(): string
+    {
+        $barcodeValue = trim((string) ($this->barcode ?: $this->medicine_code));
+
+        if (! preg_match('/^\d{13}$/', $barcodeValue) || self::isValidEan13($barcodeValue)) {
+            return $barcodeValue;
+        }
+
+        $barcodePrefix = substr($barcodeValue, 0, 12);
+
+        return $barcodePrefix.self::ean13CheckDigit($barcodePrefix);
+    }
+
+    private static function isValidEan13(string $barcodeValue): bool
+    {
+        $barcodePrefix = substr($barcodeValue, 0, 12);
+
+        return self::ean13CheckDigit($barcodePrefix) === (int) substr($barcodeValue, -1);
+    }
+
+    private static function ean13CheckDigit(string $barcodePrefix): int
+    {
+        $checksum = array_sum(array_map(
+            fn (string $digit, int $index): int => (int) $digit * ($index % 2 === 0 ? 1 : 3),
+            str_split($barcodePrefix),
+            array_keys(str_split($barcodePrefix)),
+        ));
+
+        return (10 - $checksum % 10) % 10;
     }
 }

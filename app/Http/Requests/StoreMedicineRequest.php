@@ -7,6 +7,14 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreMedicineRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'dosage_form' => $this->input('dosage_form', 'Unspecified'),
+            'maximum_stock_level' => max(100, (int) $this->input('minimum_stock_level', 10)),
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -32,6 +40,7 @@ class StoreMedicineRequest extends FormRequest
             'strength' => ['nullable', 'string', 'max:255'],
             'dosage_form' => ['required', 'string', 'max:80'],
             'unit' => ['required', 'string', 'max:40'],
+            'box_size' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'minimum_stock_level' => ['required', 'integer', 'min:0'],
             'maximum_stock_level' => ['required', 'integer', 'gte:minimum_stock_level'],
             'reorder_level' => ['required', 'integer', 'min:0', 'lte:maximum_stock_level'],

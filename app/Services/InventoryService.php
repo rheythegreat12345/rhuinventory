@@ -38,6 +38,19 @@ class InventoryService
                 ]);
             }
 
+            if ($batch && filled($data['lot_number'] ?? null) && filled($batch->lot_number) && $batch->lot_number !== $data['lot_number']) {
+                throw ValidationException::withMessages([
+                    'lot_number' => 'This batch already exists with a different lot number. Use the matching lot number or verify the package label.',
+                ]);
+            }
+
+            if ($batch && ((int) $batch->supplier_id !== (int) $data['supplier_id']
+                || (int) $batch->storage_location_id !== (int) $data['storage_location_id'])) {
+                throw ValidationException::withMessages([
+                    'batch_number' => 'This batch is already recorded under a different supplier or storage location. Use the original receipt details or create a stock transfer first.',
+                ]);
+            }
+
             $batch ??= MedicineBatch::query()->create([
                 'medicine_id' => $data['medicine_id'],
                 'supplier_id' => $data['supplier_id'],
@@ -55,16 +68,17 @@ class InventoryService
             $previousStock = $batch->quantity;
             $batch->update([
                 'quantity' => $batch->quantity + $data['quantity'],
-                'supplier_id' => $data['supplier_id'],
-                'storage_location_id' => $data['storage_location_id'],
                 'unit_cost' => $data['unit_cost'],
                 'received_at' => $data['received_at'],
+                'lot_number' => $batch->lot_number ?? ($data['lot_number'] ?? null),
+                'manufacturing_date' => $batch->manufacturing_date ?? ($data['manufacturing_date'] ?? null),
             ]);
 
             $transaction = $this->createTransaction($batch, $user, TransactionType::StockIn, $data['quantity'], $previousStock, [
                 'transacted_at' => $data['received_at'],
                 'reference_number' => $data['reference_number'] ?? null,
                 'remarks' => $data['remarks'] ?? null,
+                'metadata' => $data['metadata'] ?? null,
             ]);
 
             InventoryNotification::query()->create([
@@ -72,7 +86,7 @@ class InventoryService
                 'title' => 'Stock received',
                 'message' => "Received {$data['quantity']} {$batch->medicine->unit} of {$batch->medicine->generic_name}.",
                 'level' => 'success',
-                'data' => ['medicine_id' => $batch->medicine_id, 'url' => route('medicines.show', $batch->medicine_id)],
+                'data' => ['medicine_id' => $batch->medicine_id, 'url' => route('medicines.show', $batch->medicine_id, false)],
             ]);
 
             $this->auditService->record('stock_in', "Received stock for {$batch->medicine->generic_name} ({$batch->batch_number}).", $transaction, null, $transaction->toArray());
@@ -101,9 +115,18 @@ class InventoryService
                 ->lockForUpdate()
                 ->get();
 
-            if ($batches->sum('quantity') < $requestedQuantity) {
+            $availableQuantity = (int) $batches->sum('quantity');
+
+            if ($availableQuantity < $requestedQuantity) {
                 throw ValidationException::withMessages([
-                    'quantity' => "Only {$batches->sum('quantity')} non-expired {$medicine->unit} are available.",
+                    'quantity' => "Only {$availableQuantity} non-expired {$medicine->unit} are available.",
+                ]);
+            }
+
+            if (($data['metadata']['entered_unit'] ?? null) === 'box'
+                && $availableQuantity < Medicine::MINIMUM_UNITS_FOR_BOX_RELEASE) {
+                throw ValidationException::withMessages([
+                    'quantity_unit' => 'Boxes can only be released when at least '.Medicine::MINIMUM_UNITS_FOR_BOX_RELEASE.' non-expired units are available. Use individual units instead.',
                 ]);
             }
 
@@ -155,7 +178,7 @@ class InventoryService
                 'reason' => AdjustmentReason::from($data['reason'])->label(),
                 'remarks' => $data['notes'] ?? null,
                 'transacted_at' => now(),
-                'metadata' => ['quantity_difference' => $difference],
+                'metadata' => array_merge(['quantity_difference' => $difference], $data['metadata'] ?? []),
             ]);
 
             StockAdjustment::query()->create([

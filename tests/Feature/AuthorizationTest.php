@@ -2,13 +2,25 @@
 
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\User;
 
 test('a viewer cannot open administrative pages', function () {
     $viewer = userWithPermissions(['medicines.view', 'transactions.view']);
 
     $this->actingAs($viewer)->get(route('users.index'))->assertForbidden();
+    $this->actingAs($viewer)->put(route('users.approve', User::factory()->create(['status' => 'inactive'])))->assertForbidden();
     $this->actingAs($viewer)->get(route('settings.edit'))->assertForbidden();
     $this->actingAs($viewer)->get(route('stock.adjustment'))->assertForbidden();
+});
+
+test('a non-administrator cannot access account controls even with administrative permissions', function () {
+    $staff = userWithPermissions(['users.manage', 'audit.view', 'settings.manage']);
+
+    $this->actingAs($staff)->get(route('admin.accounts.index'))->assertForbidden();
+    $this->actingAs($staff)->get(route('users.index'))->assertForbidden();
+    $this->actingAs($staff)->get(route('roles.index'))->assertForbidden();
+    $this->actingAs($staff)->get(route('audit.index'))->assertForbidden();
+    $this->actingAs($staff)->get(route('settings.edit'))->assertForbidden();
 });
 
 test('permissions grant access to matching pages', function () {
@@ -25,7 +37,8 @@ test('guests are redirected to login', function () {
 });
 
 test('an administrator can update role permissions', function () {
-    $administrator = userWithPermissions(['users.manage']);
+    $administratorRole = Role::factory()->create(['slug' => 'administrator', 'is_active' => true]);
+    $administrator = User::factory()->create(['role_id' => $administratorRole->id]);
     $role = Role::factory()->create();
     $permission = Permission::factory()->create(['slug' => 'reports.export']);
 

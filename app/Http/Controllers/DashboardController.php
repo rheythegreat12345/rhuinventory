@@ -17,19 +17,21 @@ class DashboardController extends Controller
     {
         $alertService->syncExpirations();
         $medicines = Medicine::query()->where('status', 'active')->withInventory()->get();
+        $activeMedicineBatches = MedicineBatch::query()
+            ->whereHas('medicine', fn ($medicineQuery) => $medicineQuery->where('status', 'active'));
         $todayTransactions = InventoryTransaction::query()->whereDate('transacted_at', today());
 
         $statistics = [
             'total_medicines' => $medicines->count(),
-            'total_stock' => $medicines->sum('current_stock'),
+            'total_stock' => $medicines->sum('usable_stock'),
             'low_stock' => $medicines->filter(fn (Medicine $medicine) => in_array($medicine->stockStatus(), ['low', 'critical'], true))->count(),
             'out_of_stock' => $medicines->filter(fn (Medicine $medicine) => $medicine->stockStatus() === 'out')->count(),
-            'expiring_soon' => MedicineBatch::query()->where('quantity', '>', 0)->whereBetween('expiration_date', [today(), today()->addDays(90)])->count(),
-            'expired' => MedicineBatch::query()->where('quantity', '>', 0)->whereDate('expiration_date', '<', today())->count(),
+            'expiring_soon' => (clone $activeMedicineBatches)->where('quantity', '>', 0)->whereBetween('expiration_date', [today(), today()->addDays(90)])->count(),
+            'expired' => (clone $activeMedicineBatches)->where('quantity', '>', 0)->whereDate('expiration_date', '<', today())->count(),
             'today_transactions' => (clone $todayTransactions)->count(),
             'dispensed_today' => (clone $todayTransactions)->where('type', TransactionType::Dispensed)->sum('quantity'),
             'received_today' => (clone $todayTransactions)->where('type', TransactionType::StockIn)->sum('quantity'),
-            'inventory_value' => MedicineBatch::query()->selectRaw('COALESCE(SUM(quantity * unit_cost), 0) as total')->value('total'),
+            'inventory_value' => (clone $activeMedicineBatches)->where('quantity', '>', 0)->selectRaw('COALESCE(SUM(quantity * unit_cost), 0) as total')->value('total'),
         ];
 
         $inventoryStatus = collect(['normal', 'low', 'critical', 'out'])->mapWithKeys(
@@ -39,9 +41,9 @@ class DashboardController extends Controller
         $dates = collect(range(13, 0))->map(fn (int $days) => today()->subDays($days));
         $movement = $this->movementSeries($dates);
         $expiration = [
-            '30 days' => MedicineBatch::query()->where('quantity', '>', 0)->whereBetween('expiration_date', [today(), today()->addDays(30)])->count(),
-            '60 days' => MedicineBatch::query()->where('quantity', '>', 0)->whereBetween('expiration_date', [today()->addDays(31), today()->addDays(60)])->count(),
-            '90 days' => MedicineBatch::query()->where('quantity', '>', 0)->whereBetween('expiration_date', [today()->addDays(61), today()->addDays(90)])->count(),
+            '30 days' => (clone $activeMedicineBatches)->where('quantity', '>', 0)->whereBetween('expiration_date', [today(), today()->addDays(30)])->count(),
+            '60 days' => (clone $activeMedicineBatches)->where('quantity', '>', 0)->whereBetween('expiration_date', [today()->addDays(31), today()->addDays(60)])->count(),
+            '90 days' => (clone $activeMedicineBatches)->where('quantity', '>', 0)->whereBetween('expiration_date', [today()->addDays(61), today()->addDays(90)])->count(),
             'Expired' => $statistics['expired'],
         ];
 
@@ -51,8 +53,8 @@ class DashboardController extends Controller
             'movement' => $movement,
             'expiration' => $expiration,
             'recentTransactions' => InventoryTransaction::query()->with(['medicine', 'batch', 'user'])->latest('transacted_at')->limit(8)->get(),
-            'lowStockMedicines' => $medicines->filter(fn (Medicine $medicine) => $medicine->stockStatus() !== 'normal')->sortBy('current_stock')->take(6),
-            'expiringBatches' => MedicineBatch::query()->with('medicine')->where('quantity', '>', 0)->whereBetween('expiration_date', [today(), today()->addDays(90)])->orderBy('expiration_date')->limit(6)->get(),
+            'lowStockMedicines' => $medicines->filter(fn (Medicine $medicine) => $medicine->stockStatus() !== 'normal')->sortBy('usable_stock')->take(6),
+            'expiringBatches' => (clone $activeMedicineBatches)->with('medicine')->where('quantity', '>', 0)->whereBetween('expiration_date', [today(), today()->addDays(90)])->orderBy('expiration_date')->limit(6)->get(),
         ]);
     }
 

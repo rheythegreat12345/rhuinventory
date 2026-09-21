@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InventoryNotification;
+use App\Models\InventoryNotificationRead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -12,12 +13,12 @@ class NotificationController extends Controller
     public function index(Request $request): View
     {
         $status = $request->string('status')->toString() === 'unread' ? 'unread' : 'all';
-        $notificationQuery = InventoryNotification::query()
-            ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $request->user()->id));
+        $notificationQuery = InventoryNotification::query()->visibleTo($request->user());
         $totalCount = (clone $notificationQuery)->count();
-        $unreadCount = (clone $notificationQuery)->whereNull('read_at')->count();
+        $unreadCount = (clone $notificationQuery)->unreadFor($request->user())->count();
         $notifications = (clone $notificationQuery)
-            ->when($status === 'unread', fn ($query) => $query->whereNull('read_at'))
+            ->withReadStateFor($request->user())
+            ->when($status === 'unread', fn ($query) => $query->unreadFor($request->user()))
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -27,21 +28,80 @@ class NotificationController extends Controller
 
     public function read(Request $request, InventoryNotification $notification): RedirectResponse
     {
-        abort_unless($notification->user_id === null || $notification->user_id === $request->user()->id, 403);
-        if ($notification->read_at === null) {
-            $notification->update(['read_at' => now()]);
-        }
+        abort_unless(
+            InventoryNotification::query()
+                ->visibleTo($request->user())
+                ->whereKey($notification->getKey())
+                ->exists(),
+            403,
+        );
+        $notification->markReadBy($request->user());
 
-        return redirect()->to($notification->data['url'] ?? route('notifications.index'));
+        return redirect()->to($this->destinationFor($notification));
     }
 
     public function readAll(Request $request): RedirectResponse
     {
         InventoryNotification::query()
-            ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $request->user()->id))
+            ->visibleTo($request->user())
+            ->whereNotNull('user_id')
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
+        $sharedNotificationIds = InventoryNotification::query()
+            ->visibleTo($request->user())
+            ->whereNull('user_id')
+            ->unreadFor($request->user())
+            ->pluck('id');
+
+        if ($sharedNotificationIds->isNotEmpty()) {
+            $now = now();
+            InventoryNotificationRead::query()->upsert(
+                $sharedNotificationIds->map(fn (int $notificationId): array => [
+                    'inventory_notification_id' => $notificationId,
+                    'user_id' => $request->user()->id,
+                    'read_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all(),
+                ['inventory_notification_id', 'user_id'],
+                ['read_at', 'updated_at'],
+            );
+        }
+
         return back()->with('success', 'All notifications marked as read.');
+    }
+
+    public function destroy(Request $request, InventoryNotification $notification): RedirectResponse
+    {
+        abort_unless(
+            InventoryNotification::query()
+                ->visibleTo($request->user())
+                ->whereKey($notification->getKey())
+                ->exists(),
+            403,
+        );
+
+        $notification->deleteFor($request->user());
+
+        return back()->with('success', 'Notification deleted from your history.');
+    }
+
+    private function destinationFor(InventoryNotification $notification): string
+    {
+        $destination = $notification->data['url'] ?? route('notifications.index', [], false);
+
+        if (! is_string($destination)) {
+            return route('notifications.index', [], false);
+        }
+
+        $parts = parse_url($destination);
+        $path = $parts['path'] ?? null;
+
+        if (! is_string($path) || ! str_starts_with($path, '/')) {
+            return route('notifications.index', [], false);
+        }
+
+        return $path.(isset($parts['query']) ? "?{$parts['query']}" : '');
     }
 }

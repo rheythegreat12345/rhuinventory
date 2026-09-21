@@ -8,6 +8,17 @@ use Illuminate\Validation\Rule;
 
 class UpdateMedicineRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $medicine = $this->route('medicine');
+        $existingMaximum = $medicine?->maximum_stock_level ?? 100;
+
+        $this->merge([
+            'dosage_form' => $this->input('dosage_form', $medicine?->dosage_form ?? 'Unspecified'),
+            'maximum_stock_level' => max(100, (int) $existingMaximum, (int) $this->input('minimum_stock_level', 10)),
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -35,6 +46,7 @@ class UpdateMedicineRequest extends FormRequest
             'strength' => ['nullable', 'string', 'max:255'],
             'dosage_form' => ['required', 'string', 'max:80'],
             'unit' => ['required', 'string', 'max:40'],
+            'box_size' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'minimum_stock_level' => ['required', 'integer', 'min:0'],
             'maximum_stock_level' => ['required', 'integer', 'gte:minimum_stock_level'],
             'reorder_level' => ['required', 'integer', 'min:0', 'lte:maximum_stock_level'],

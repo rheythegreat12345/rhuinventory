@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AccountApprovalNotificationService;
 use App\Services\OtpService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 use Throwable;
@@ -17,7 +18,8 @@ use Throwable;
 class RegisterController extends Controller
 {
     public function __construct(
-        private OtpService $otpService
+        private OtpService $otpService,
+        private AccountApprovalNotificationService $accountApprovalNotificationService,
     ) {}
 
     public function showRegistrationForm(): View
@@ -27,6 +29,10 @@ class RegisterController extends Controller
 
     public function register(Request $request): RedirectResponse
     {
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email'))),
+        ]);
+
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
@@ -87,32 +93,41 @@ class RegisterController extends Controller
             return redirect()->route('register')->withErrors(['email' => 'Registration session expired. Please try again.']);
         }
 
+        if (User::query()->where('email', $registrationData['email'])->exists()) {
+            session()->forget('registration_data');
+
+            return redirect()->route('register')->withErrors(['email' => 'An account with this email address already exists. Please sign in instead.']);
+        }
+
+        $defaultRole = Role::query()->where('slug', 'rhu-staff')->where('is_active', true)->first();
+
+        if (! $defaultRole) {
+            return back()->withErrors(['otp' => 'Account requests are temporarily unavailable. Please contact the system administrator.']);
+        }
+
         // Verify OTP
         if (! $this->otpService->verify($registrationData['email'], $request->otp)) {
             return back()->withErrors(['otp' => 'Invalid or expired OTP. Please try again.']);
         }
 
         // Create user
-        $defaultRole = Role::where('slug', 'staff')->first() ?? Role::first();
-
         $user = User::create([
             'name' => $registrationData['name'],
             'email' => $registrationData['email'],
             'password' => $registrationData['password'],
             'role_id' => $defaultRole?->id,
-            'status' => 'active',
+            'status' => 'inactive',
             'phone' => $registrationData['phone'] ?? null,
             'job_title' => $registrationData['job_title'] ?? null,
             'email_verified_at' => now(),
         ]);
 
+        $this->accountApprovalNotificationService->notifyAdministrators($user);
+
         // Clear registration session
         session()->forget('registration_data');
 
-        Auth::login($user);
-        $user->update(['last_login_at' => now()]);
-
-        return redirect()->route('dashboard')->with('success', 'Account created successfully! Welcome, '.$user->name.'.');
+        return redirect()->route('login')->with('success', 'Your account request was submitted. An administrator must approve it before you can sign in.');
     }
 
     public function resendOtp(Request $request): RedirectResponse

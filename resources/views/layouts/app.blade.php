@@ -13,10 +13,10 @@
 <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
         <a class="brand" href="{{ route('dashboard') }}">
-            <span class="brand-mark"><x-icon name="medicine" /></span>
+            <span class="brand-mark"><img class="brand-logo" src="{{ asset('images/sudipen-rhu-seal.jpg') }}" alt="Sudipen Rural Health Unit seal"></span>
             <span class="brand-copy"><span class="brand-name">{{ $systemSettings['system_name'] ?? 'MediStock RHU' }}</span><span class="brand-subtitle">Medicine inventory</span></span>
         </a>
-        <nav class="sidebar-scroll">
+        <nav class="sidebar-scroll" data-sidebar-navigation>
             <div class="nav-section">Overview</div>
             <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><x-icon name="home" /><span>Dashboard</span></a>
             @if(auth()->user()->hasPermission('medicines.view'))
@@ -25,10 +25,9 @@
                 <a class="nav-link {{ request()->routeIs('inventory.expirations') ? 'active' : '' }}" href="{{ route('inventory.expirations') }}"><x-icon name="calendar" /><span>Expirations</span></a>
             @endif
 
-            @if(auth()->user()->hasPermission('stock.receive') || auth()->user()->hasPermission('stock.release') || auth()->user()->hasPermission('stock.adjust'))
+            @if(auth()->user()->hasPermission('medicines.view') || auth()->user()->hasPermission('medicines.create') || auth()->user()->hasPermission('stock.receive') || auth()->user()->hasPermission('stock.release') || auth()->user()->hasPermission('stock.adjust'))
                 <div class="nav-section">Stock operations</div>
-                @if(auth()->user()->hasPermission('stock.receive'))<a class="nav-link {{ request()->routeIs('stock.in*') ? 'active' : '' }}" href="{{ route('stock.in') }}"><x-icon name="stock-in" /><span>Stock In</span></a>@endif
-                @if(auth()->user()->hasPermission('stock.release'))<a class="nav-link {{ request()->routeIs('stock.out*') ? 'active' : '' }}" href="{{ route('stock.out') }}"><x-icon name="stock-out" /><span>Stock Out / Dispense</span></a>@endif
+                <a class="nav-link {{ request()->routeIs('scanner*') ? 'active' : '' }}" href="{{ route('scanner') }}"><x-icon name="scan" /><span>Scan / Restock</span></a>
                 @if(auth()->user()->hasPermission('stock.adjust'))<a class="nav-link {{ request()->routeIs('stock.adjustment*') ? 'active' : '' }}" href="{{ route('stock.adjustment') }}"><x-icon name="adjust" /><span>Adjustments</span></a>@endif
             @endif
             @if(auth()->user()->hasPermission('transactions.view'))<a class="nav-link {{ request()->routeIs('transactions.*') ? 'active' : '' }}" href="{{ route('transactions.index') }}"><x-icon name="transaction" /><span>Transactions</span></a>@endif
@@ -45,12 +44,13 @@
                 @if(auth()->user()->hasPermission('analytics.view'))<a class="nav-link {{ request()->routeIs('analytics') ? 'active' : '' }}" href="{{ route('analytics') }}"><x-icon name="analytics" /><span>Analytics</span></a>@endif
             @endif
 
-            @if(auth()->user()->hasPermission('users.manage') || auth()->user()->hasPermission('audit.view') || auth()->user()->hasPermission('settings.manage'))
+            @if(auth()->user()->role?->slug === 'administrator')
                 <div class="nav-section">Administration</div>
-                @if(auth()->user()->hasPermission('users.manage'))<a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}"><x-icon name="users" /><span>User Management</span></a>@endif
-                @if(auth()->user()->hasPermission('users.manage'))<a class="nav-link {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}"><x-icon name="settings" /><span>Roles & Permissions</span></a>@endif
-                @if(auth()->user()->hasPermission('audit.view'))<a class="nav-link {{ request()->routeIs('audit.*') ? 'active' : '' }}" href="{{ route('audit.index') }}"><x-icon name="audit" /><span>Audit Log</span></a>@endif
-                @if(auth()->user()->hasPermission('settings.manage'))<a class="nav-link {{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.edit') }}"><x-icon name="settings" /><span>Settings</span></a>@endif
+                <a class="nav-link {{ request()->routeIs('admin.accounts.*') ? 'active' : '' }}" href="{{ route('admin.accounts.index') }}"><x-icon name="lock" /><span>Admin Accounts</span></a>
+                <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}"><x-icon name="users" /><span>User Management</span></a>
+                <a class="nav-link {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}"><x-icon name="settings" /><span>Roles & Permissions</span></a>
+                <a class="nav-link {{ request()->routeIs('audit.*') ? 'active' : '' }}" href="{{ route('audit.index') }}"><x-icon name="audit" /><span>Audit Log</span></a>
+                <a class="nav-link {{ request()->routeIs('settings.*') ? 'active' : '' }}" href="{{ route('settings.edit') }}"><x-icon name="settings" /><span>Settings</span></a>
             @endif
         </nav>
         <div class="sidebar-footer">
@@ -67,7 +67,6 @@
             <button class="icon-button sidebar-toggle" type="button" data-sidebar-toggle aria-label="Toggle sidebar"><x-icon name="menu" /></button>
             <span class="topbar-spacer"></span>
             <div class="topbar-actions">
-                <a class="icon-button scanner-shortcut desktop-only" href="{{ route('scanner') }}" title="Barcode scanner" aria-label="Open barcode scanner"><x-icon name="scan" /></a>
                 <button class="icon-button" type="button" data-theme-toggle title="Toggle theme"><x-icon name="moon" /></button>
                 <div class="topbar-action notification-dropdown" data-dropdown>
                     <button class="icon-button notification-trigger" type="button" data-dropdown-trigger aria-label="Notifications, {{ $unreadNotificationCount ?? 0 }} unread" aria-haspopup="true" aria-expanded="false" aria-controls="notification-menu"><x-icon name="bell" />@if(($unreadNotificationCount ?? 0) > 0)<span class="notification-dot">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>@endif</button>
@@ -83,9 +82,9 @@
                                 @php($notificationIcon = match ($notification->level) { 'danger', 'warning' => 'alert', 'success' => 'check', default => 'bell' })
                                 <form class="notification-menu-form" method="POST" action="{{ route('notifications.read', $notification) }}">
                                     @csrf
-                                    <button class="notification-menu-item {{ $notification->read_at ? '' : 'unread' }}" type="submit">
+                                    <button class="notification-menu-item {{ $notification->isReadBy(auth()->user()) ? '' : 'unread' }}" type="submit">
                                         <span class="notification-icon {{ $notification->level }}"><x-icon name="{{ $notificationIcon }}" class="icon-sm" /></span>
-                                        <span class="notification-copy"><strong>{{ $notification->title }}</strong><p>{{ $notification->message }}</p><span class="notification-meta"><time title="{{ $notification->created_at->format('M d, Y g:i A') }}">{{ $notification->created_at->diffForHumans() }}</time>@if(!$notification->read_at)<span class="notification-unread-mark">Unread</span>@endif</span></span>
+                                        <span class="notification-copy"><strong>{{ $notification->title }}</strong><p>{{ $notification->message }}</p><span class="notification-meta"><time title="{{ $notification->created_at->format('M d, Y g:i A') }}">{{ $notification->created_at->diffForHumans() }}</time>@if(!$notification->isReadBy(auth()->user()))<span class="notification-unread-mark">Unread</span>@endif</span></span>
                                     </button>
                                 </form>
                             @empty
@@ -110,6 +109,13 @@
             @if(session('error'))<div class="alert alert-error" data-dismissible><x-icon name="alert" /><span>{{ session('error') }}</span><button data-dismiss type="button"><x-icon name="x" class="icon-sm" /></button></div>@endif
             @if($errors->any())<div class="alert alert-error" data-dismissible><x-icon name="alert" /><span><strong>Please check the form.</strong><br>{{ $errors->first() }}</span><button data-dismiss type="button"><x-icon name="x" class="icon-sm" /></button></div>@endif
             @yield('content')
+        </div>
+        <div id="page-navigation-loader" class="page-navigation-loader" role="status" aria-live="polite" hidden>
+            <div class="page-navigation-loader-card">
+                <span class="page-navigation-loader-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+                <strong>Loading section</strong>
+                <p>Preparing your workspace...</p>
+            </div>
         </div>
     </main>
 </div>

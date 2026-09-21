@@ -13,10 +13,10 @@ use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\StreamedResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MedicineController extends Controller
 {
@@ -112,6 +112,36 @@ class MedicineController extends Controller
         return redirect()->route('medicines.index')->with('success', 'Medicine archived. Its transaction history was preserved.');
     }
 
+    /**
+     * Archive selected catalog records while preserving their inventory history.
+     */
+    public function bulkArchive(Request $request, AuditService $auditService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'medicine_ids' => ['required', 'array', 'min:1'],
+            'medicine_ids.*' => ['integer', 'distinct', 'exists:medicines,id'],
+        ]);
+        $medicineIds = collect($validated['medicine_ids'])->map(fn (mixed $medicineId): int => (int) $medicineId)->unique()->values();
+        $medicines = Medicine::query()->whereKey($medicineIds)->get();
+
+        if ($medicines->count() !== $medicineIds->count()) {
+            throw ValidationException::withMessages(['medicine_ids' => 'One or more selected medicines are no longer available. Refresh the list and try again.']);
+        }
+
+        DB::transaction(function () use ($medicines, $auditService): void {
+            foreach ($medicines as $medicine) {
+                $previousStatus = $medicine->status;
+                $medicine->update(['status' => 'archived']);
+                $auditService->record('medicine_archived', "Archived medicine {$medicine->generic_name}.", $medicine, ['status' => $previousStatus], ['status' => 'archived']);
+                $medicine->delete();
+            }
+        });
+
+        $count = $medicines->count();
+
+        return back()->with('success', "Archived {$count} ".str('medicine')->plural($count).'. Their transaction history was preserved.');
+    }
+
     public function export(Request $request): StreamedResponse
     {
         $medicines = $this->filteredQuery($request)->get();
@@ -152,43 +182,69 @@ class MedicineController extends Controller
             throw ValidationException::withMessages(['import_file' => 'The CSV is missing required columns. Download the template and try again.']);
         }
 
-        $count = DB::transaction(function () use ($handle, $headers): int {
-            $imported = 0;
-            while (($values = fgetcsv($handle)) !== false) {
-                if (count($values) !== count($headers)) {
-                    continue;
-                }
-                $row = array_combine($headers, $values);
-                $category = MedicineCategory::query()->where('code', $row['category_code'])->first();
-                if (! $category || blank($row['medicine_code']) || blank($row['generic_name'])) {
-                    continue;
-                }
-                Medicine::query()->updateOrCreate(
-                    ['medicine_code' => $row['medicine_code']],
-                    [
-                        'medicine_category_id' => $category->id,
-                        'generic_name' => $row['generic_name'],
-                        'brand_name' => $row['brand_name'] ?: null,
-                        'dosage' => $row['dosage'] ?: null,
-                        'strength' => $row['strength'] ?: null,
-                        'dosage_form' => $row['dosage_form'],
-                        'unit' => $row['unit'],
-                        'minimum_stock_level' => max(0, (int) $row['minimum_stock_level']),
-                        'maximum_stock_level' => max(0, (int) $row['maximum_stock_level']),
-                        'reorder_level' => max(0, (int) $row['reorder_level']),
-                        'unit_cost' => max(0, (float) $row['unit_cost']),
-                        'reference_price' => $row['reference_price'] !== '' ? max(0, (float) $row['reference_price']) : null,
-                        'storage_condition' => $row['storage_condition'] ?: null,
-                        'description' => $row['description'] ?: null,
-                        'status' => 'active',
-                    ],
-                );
-                $imported++;
-            }
+        try {
+            $count = DB::transaction(function () use ($handle, $headers): int {
+                $imported = 0;
+                $lineNumber = 1;
 
-            return $imported;
-        });
-        fclose($handle);
+                while (($values = fgetcsv($handle)) !== false) {
+                    $lineNumber++;
+
+                    if (count($values) !== count($headers)) {
+                        continue;
+                    }
+
+                    $row = array_combine($headers, $values);
+                    if ($row === false) {
+                        continue;
+                    }
+
+                    $value = static fn (string $field): string => trim((string) ($row[$field] ?? ''));
+                    $category = MedicineCategory::query()->where('code', $value('category_code'))->first();
+                    if (! $category || blank($value('medicine_code')) || blank($value('generic_name'))) {
+                        continue;
+                    }
+
+                    $minimumStockLevel = $this->importInteger($value('minimum_stock_level'), 'minimum_stock_level', $lineNumber);
+                    $maximumStockLevel = $this->importInteger($value('maximum_stock_level'), 'maximum_stock_level', $lineNumber, $minimumStockLevel);
+                    $reorderLevel = $this->importInteger($value('reorder_level'), 'reorder_level', $lineNumber);
+
+                    if ($maximumStockLevel < $minimumStockLevel) {
+                        throw ValidationException::withMessages(['import_file' => "Row {$lineNumber}: maximum_stock_level cannot be lower than minimum_stock_level."]);
+                    }
+
+                    if ($reorderLevel > $maximumStockLevel) {
+                        throw ValidationException::withMessages(['import_file' => "Row {$lineNumber}: reorder_level cannot be higher than maximum_stock_level."]);
+                    }
+
+                    Medicine::query()->updateOrCreate(
+                        ['medicine_code' => $value('medicine_code')],
+                        [
+                            'medicine_category_id' => $category->id,
+                            'generic_name' => $value('generic_name'),
+                            'brand_name' => $value('brand_name') ?: null,
+                            'dosage' => $value('dosage') ?: null,
+                            'strength' => $value('strength') ?: null,
+                            'dosage_form' => $value('dosage_form'),
+                            'unit' => $value('unit'),
+                            'minimum_stock_level' => $minimumStockLevel,
+                            'maximum_stock_level' => $maximumStockLevel,
+                            'reorder_level' => $reorderLevel,
+                            'unit_cost' => $this->importAmount($value('unit_cost'), 'unit_cost', $lineNumber),
+                            'reference_price' => $value('reference_price') !== '' ? $this->importAmount($value('reference_price'), 'reference_price', $lineNumber) : null,
+                            'storage_condition' => $value('storage_condition') ?: null,
+                            'description' => $value('description') ?: null,
+                            'status' => 'active',
+                        ],
+                    );
+                    $imported++;
+                }
+
+                return $imported;
+            });
+        } finally {
+            fclose($handle);
+        }
         $auditService->record('medicine_import', "Imported or updated {$count} medicines from CSV.");
 
         return back()->with('success', "Imported or updated {$count} medicine records.");
@@ -196,7 +252,8 @@ class MedicineController extends Controller
 
     private function filteredQuery(Request $request): Builder
     {
-        $stockExpression = '(SELECT COALESCE(SUM(medicine_batches.quantity), 0) FROM medicine_batches WHERE medicine_batches.medicine_id = medicines.id)';
+        $today = today()->toDateString();
+        $stockExpression = "(SELECT COALESCE(SUM(medicine_batches.quantity), 0) FROM medicine_batches WHERE medicine_batches.medicine_id = medicines.id AND medicine_batches.status = 'active' AND DATE(medicine_batches.expiration_date) >= '{$today}')";
         $query = Medicine::query()->with('category')->withInventory()->search($request->string('search')->toString());
 
         $query->when($request->integer('category'), fn (Builder $builder, int $categoryId) => $builder->where('medicine_category_id', $categoryId))
@@ -225,5 +282,31 @@ class MedicineController extends Controller
         $direction = $request->string('direction')->toString() === 'desc' ? 'desc' : 'asc';
 
         return $query->orderBy($sort, $direction);
+    }
+
+    private function importInteger(string $value, string $field, int $lineNumber, ?int $default = 0, int $minimum = 0): int
+    {
+        if ($value === '' && $default !== null) {
+            return $default;
+        }
+
+        if (filter_var($value, FILTER_VALIDATE_INT) === false || (int) $value < $minimum) {
+            throw ValidationException::withMessages(['import_file' => "Row {$lineNumber}: {$field} must be a whole number of at least {$minimum}."]);
+        }
+
+        return (int) $value;
+    }
+
+    private function importAmount(string $value, string $field, int $lineNumber): float
+    {
+        if ($value === '') {
+            return 0;
+        }
+
+        if (! is_numeric($value) || (float) $value < 0) {
+            throw ValidationException::withMessages(['import_file' => "Row {$lineNumber}: {$field} must be zero or a positive amount."]);
+        }
+
+        return (float) $value;
     }
 }

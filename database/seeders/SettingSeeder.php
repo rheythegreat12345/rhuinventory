@@ -14,7 +14,7 @@ class SettingSeeder extends Seeder
     {
         $settings = [
             'system_name' => ['MediStock RHU', 'string', 'general', true],
-            'facility_name' => ['San Isidro Rural Health Unit', 'string', 'general', true],
+            'facility_name' => ['Sudipen Rural Health Unit', 'string', 'general', true],
             'contact_phone' => ['(049) 555-0147', 'string', 'general', false],
             'contact_email' => ['health@sanisidro.example', 'string', 'general', false],
             'address' => ['San Isidro Municipal Compound, Philippines', 'string', 'general', false],
