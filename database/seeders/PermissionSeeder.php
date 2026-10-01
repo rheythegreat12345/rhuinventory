@@ -38,9 +38,7 @@ class PermissionSeeder extends Seeder
         $grants = [
             'administrator' => array_keys($permissions),
             'pharmacist' => ['medicines.view', 'medicines.create', 'medicines.edit', 'stock.receive', 'stock.release', 'stock.adjust', 'transactions.view', 'categories.manage', 'suppliers.manage', 'reports.view', 'reports.export', 'analytics.view'],
-            'inventory-staff' => ['medicines.view', 'medicines.create', 'medicines.edit', 'stock.receive', 'stock.release', 'stock.adjust', 'transactions.view', 'reports.view', 'reports.export'],
             'rhu-staff' => ['medicines.view', 'transactions.view', 'reports.view'],
-            'viewer' => ['medicines.view', 'transactions.view', 'reports.view'],
         ];
 
         foreach ($grants as $roleSlug => $permissionSlugs) {

@@ -125,7 +125,14 @@ test('a new account requires accepted terms and sends an email verification code
 });
 
 test('a verified registration requires administrator approval before sign in', function () {
-    $role = Role::factory()->create(['slug' => 'rhu-staff', 'is_active' => true]);
+    $role = Role::query()->firstOrCreate(
+        ['slug' => 'rhu-staff'],
+        [
+            'name' => 'RHU Staff',
+            'description' => 'Read access to medicine and transaction records.',
+            'is_active' => true,
+        ],
+    );
     $administratorRole = Role::factory()->create(['slug' => 'administrator', 'is_active' => true]);
     $administrator = User::factory()->create(['role_id' => $administratorRole->id]);
     $email = 'pending.staff@example.test';
@@ -160,7 +167,14 @@ test('a verified registration requires administrator approval before sign in', f
 });
 
 test('a verified Google registration requires administrator approval before sign in', function () {
-    $role = Role::factory()->create(['slug' => 'rhu-staff', 'is_active' => true]);
+    $role = Role::query()->firstOrCreate(
+        ['slug' => 'rhu-staff'],
+        [
+            'name' => 'RHU Staff',
+            'description' => 'Read access to medicine and transaction records.',
+            'is_active' => true,
+        ],
+    );
     $email = 'pending.google@example.test';
     $otp = app(OtpService::class)->generate($email);
 

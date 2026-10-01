@@ -45,7 +45,7 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/auth/google/verify-otp', [GoogleAuthController::class, 'verifyOtp'])->name('auth.google.verify-otp');
 });
 
-Route::middleware('auth')->group(function (): void {
+Route::middleware(['auth', 'cache.headers:private;no_cache;no_store;must_revalidate;max_age=0'])->group(function (): void {
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
@@ -54,12 +54,14 @@ Route::middleware('auth')->group(function (): void {
     Route::put('/profile/password', [ProfileController::class, 'password'])->name('profile.password');
 
     Route::get('/search', [SearchController::class, 'index'])->middleware('permission:medicines.view')->name('search');
-    Route::get('/scanner', [SearchController::class, 'scanner'])->name('scanner');
-    Route::post('/scanner', [SearchController::class, 'barcode'])->name('scanner.lookup');
-    Route::get('/scanner/register', [SearchController::class, 'showScannerRegister'])->name('scanner.register');
-    Route::post('/scanner/register', [SearchController::class, 'registerFromScanner'])->name('scanner.register.store');
-    Route::get('/scanner/dispense/{medicine}', [SearchController::class, 'showScannerDispense'])->name('scanner.dispense');
-    Route::post('/scanner/dispense/{medicine}', [SearchController::class, 'dispenseFromScanner'])->name('scanner.dispense.store');
+    Route::middleware('permission:stock.receive')->group(function (): void {
+        Route::get('/scanner', [SearchController::class, 'scanner'])->name('scanner');
+        Route::post('/scanner', [SearchController::class, 'barcode'])->name('scanner.lookup');
+        Route::get('/scanner/register', [SearchController::class, 'showScannerRegister'])->name('scanner.register');
+        Route::post('/scanner/register', [SearchController::class, 'registerFromScanner'])->name('scanner.register.store');
+        Route::get('/scanner/dispense/{medicine}', [SearchController::class, 'showScannerDispense'])->name('scanner.dispense');
+        Route::post('/scanner/dispense/{medicine}', [SearchController::class, 'dispenseFromScanner'])->name('scanner.dispense.store');
+    });
 
     Route::middleware('permission:medicines.view')->group(function (): void {
         Route::get('/medicines', [MedicineController::class, 'index'])->name('medicines.index');
@@ -99,6 +101,7 @@ Route::middleware('auth')->group(function (): void {
     Route::resource('suppliers', SupplierController::class)->middleware('permission:suppliers.manage');
     Route::get('/admin/accounts', [AdminAccountController::class, 'index'])->middleware('administrator')->name('admin.accounts.index');
     Route::put('/admin/accounts/{user}/password', [AdminAccountController::class, 'resetPassword'])->middleware('administrator')->name('admin.accounts.password.reset');
+    Route::delete('/admin/accounts/{user}/sessions', [AdminAccountController::class, 'endSessions'])->middleware('administrator')->name('admin.accounts.sessions.destroy');
     Route::put('/users/{user}/approve', [UserController::class, 'approve'])->middleware('administrator')->name('users.approve');
     Route::resource('users', UserController::class)->middleware('administrator');
     Route::get('/roles', [RoleController::class, 'index'])->middleware('administrator')->name('roles.index');
@@ -110,6 +113,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/audit-logs', [ReportController::class, 'auditLogs'])->middleware('administrator')->name('audit.index');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/live', [NotificationController::class, 'live'])->name('notifications.live');
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');

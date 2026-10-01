@@ -25,9 +25,9 @@
                 <a class="nav-link {{ request()->routeIs('inventory.expirations') ? 'active' : '' }}" href="{{ route('inventory.expirations') }}"><x-icon name="calendar" /><span>Expirations</span></a>
             @endif
 
-            @if(auth()->user()->hasPermission('medicines.view') || auth()->user()->hasPermission('medicines.create') || auth()->user()->hasPermission('stock.receive') || auth()->user()->hasPermission('stock.release') || auth()->user()->hasPermission('stock.adjust'))
+            @if(auth()->user()->hasPermission('stock.receive') || auth()->user()->hasPermission('stock.release') || auth()->user()->hasPermission('stock.adjust'))
                 <div class="nav-section">Stock operations</div>
-                <a class="nav-link {{ request()->routeIs('scanner*') ? 'active' : '' }}" href="{{ route('scanner') }}"><x-icon name="scan" /><span>Scan / Restock</span></a>
+                @if(auth()->user()->hasPermission('stock.receive'))<a class="nav-link {{ request()->routeIs('scanner*') ? 'active' : '' }}" href="{{ route('scanner') }}"><x-icon name="scan" /><span>Scan / Restock</span></a>@endif
                 @if(auth()->user()->hasPermission('stock.adjust'))<a class="nav-link {{ request()->routeIs('stock.adjustment*') ? 'active' : '' }}" href="{{ route('stock.adjustment') }}"><x-icon name="adjust" /><span>Adjustments</span></a>@endif
             @endif
             @if(auth()->user()->hasPermission('transactions.view'))<a class="nav-link {{ request()->routeIs('transactions.*') ? 'active' : '' }}" href="{{ route('transactions.index') }}"><x-icon name="transaction" /><span>Transactions</span></a>@endif
@@ -65,19 +65,31 @@
     <main class="app-main">
         <header class="topbar">
             <button class="icon-button sidebar-toggle" type="button" data-sidebar-toggle aria-label="Toggle sidebar"><x-icon name="menu" /></button>
+            @if(auth()->user()->hasPermission('medicines.view'))
+                <div class="global-search">
+                    <label class="global-search-label" for="live-global-search">Live medicine search</label>
+                    <div class="global-search-control">
+                        <x-icon name="search" class="icon-sm" />
+                        <input id="live-global-search" type="search" autocomplete="off" placeholder="Search medicines, batches, or suppliers..." data-live-global-search data-url="{{ route('search') }}" aria-controls="live-search-results" aria-expanded="false">
+                        <span class="search-shortcut">Ctrl K</span>
+                    </div>
+                    <div class="search-results" id="live-search-results" data-live-search-results role="listbox" hidden></div>
+                </div>
+            @endif
             <span class="topbar-spacer"></span>
             <div class="topbar-actions">
                 <button class="icon-button" type="button" data-theme-toggle title="Toggle theme"><x-icon name="moon" /></button>
-                <div class="topbar-action notification-dropdown" data-dropdown>
-                    <button class="icon-button notification-trigger" type="button" data-dropdown-trigger aria-label="Notifications, {{ $unreadNotificationCount ?? 0 }} unread" aria-haspopup="true" aria-expanded="false" aria-controls="notification-menu"><x-icon name="bell" />@if(($unreadNotificationCount ?? 0) > 0)<span class="notification-dot">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>@endif</button>
+                <div class="topbar-action notification-dropdown" data-dropdown data-live-notifications data-url="{{ route('notifications.live') }}" data-read-all-url="{{ route('notifications.read-all') }}">
+                    <button class="icon-button notification-trigger" type="button" data-dropdown-trigger data-notification-trigger aria-label="Notifications, {{ $unreadNotificationCount ?? 0 }} unread" aria-haspopup="true" aria-expanded="false" aria-controls="notification-menu"><x-icon name="bell" />@if(($unreadNotificationCount ?? 0) > 0)<span class="notification-dot" data-notification-badge>{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>@endif</button>
                     <div class="dropdown-menu notification-menu" id="notification-menu" data-dropdown-menu hidden>
                         <div class="notification-menu-head">
-                            <div><strong>Notifications</strong><span>{{ $unreadNotificationCount ?? 0 }} unread</span></div>
-                            @if(($unreadNotificationCount ?? 0) > 0)
+                            <div class="notification-menu-title"><span class="notification-menu-eyebrow">Live updates</span><strong>Notifications</strong><span data-notification-count>{{ $unreadNotificationCount ?? 0 }} unread</span></div>
+                            <span class="notification-live-status"><span></span> Live</span>
+                            <div data-notification-read-all>@if(($unreadNotificationCount ?? 0) > 0)
                                 <form method="POST" action="{{ route('notifications.read-all') }}">@csrf<button class="notification-read-all" type="submit"><x-icon name="check" class="icon-sm" /> Mark all read</button></form>
-                            @endif
+                            @endif</div>
                         </div>
-                        <div class="notification-menu-list">
+                        <div class="notification-menu-list" data-notification-list>
                             @forelse(($layoutNotifications ?? collect()) as $notification)
                                 @php($notificationIcon = match ($notification->level) { 'danger', 'warning' => 'alert', 'success' => 'check', default => 'bell' })
                                 <form class="notification-menu-form" method="POST" action="{{ route('notifications.read', $notification) }}">

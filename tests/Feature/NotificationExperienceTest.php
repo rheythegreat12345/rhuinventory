@@ -3,6 +3,7 @@
 use App\Models\InventoryNotification;
 use App\Models\InventoryNotificationRead;
 use App\Models\MedicineBatch;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\AlertService;
 
@@ -59,12 +60,31 @@ test('the notification dropdown shows only unread notifications while the center
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertViewHas('layoutNotifications', fn ($notifications) => $notifications->contains($unreadNotification) && ! $notifications->contains($readNotification))
-        ->assertViewHas('unreadNotificationCount', 1);
+        ->assertViewHas('unreadNotificationCount', 1)
+        ->assertSee('Live updates')
+        ->assertSee('notification-live-status', false);
 
     $this->actingAs($user)
         ->get(route('notifications.index'))
         ->assertSee('Unread dropdown alert')
         ->assertSee('Read history alert');
+});
+
+test('the live notification endpoint returns only notifications visible to staff', function () {
+    $staff = userWithPermissions();
+    InventoryNotification::factory()->create(['user_id' => null, 'title' => 'Shared live alert']);
+    InventoryNotification::factory()->create([
+        'user_id' => $staff->id,
+        'type' => 'account_approval_requested',
+        'title' => 'Hidden approval request',
+    ]);
+
+    $this->actingAs($staff)
+        ->getJson(route('notifications.live'))
+        ->assertOk()
+        ->assertJsonPath('unread_count', 1)
+        ->assertJsonFragment(['title' => 'Shared live alert'])
+        ->assertJsonMissing(['title' => 'Hidden approval request']);
 });
 
 test('deleting a notification removes it only from the current users history', function () {
@@ -179,6 +199,15 @@ test('shared expiration alerts remain read for the reviewer and resolve when the
     $alertService->syncExpirations();
 
     expect($notification->fresh()->read_at)->not->toBeNull();
+});
+
+test('expiration alerts follow the configured warning period', function () {
+    Setting::factory()->create(['key' => 'expiration_warning_days', 'value' => '7', 'type' => 'integer']);
+    MedicineBatch::factory()->create(['expiration_date' => today()->addDays(8), 'quantity' => 10]);
+
+    app(AlertService::class)->syncExpirations();
+
+    expect(InventoryNotification::query()->where('type', 'expiring')->exists())->toBeFalse();
 });
 
 test('staff cannot see or act on account approval notifications', function () {

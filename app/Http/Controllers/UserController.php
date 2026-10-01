@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class UserController extends Controller
@@ -47,7 +48,32 @@ class UserController extends Controller
      */
     public function store(StoreUserRequest $request, AuditService $auditService): RedirectResponse
     {
-        $user = User::query()->create($request->validated());
+        $data = $request->validated();
+        $newRoleName = $data['new_role_name'] ?? null;
+        $newRoleDescription = $data['new_role_description'] ?? null;
+        unset($data['new_role_name'], $data['new_role_description']);
+
+        if (filled($newRoleName)) {
+            $role = Role::query()->firstOrCreate(
+                ['slug' => Str::slug($newRoleName)],
+                [
+                    'name' => $newRoleName,
+                    'description' => $newRoleDescription,
+                    'is_active' => true,
+                ],
+            );
+            $data['role_id'] = $role->id;
+
+            if ($role->wasRecentlyCreated) {
+                $auditService->record('role_created', "Created the {$role->name} role.", $role, null, [
+                    'name' => $role->name,
+                    'slug' => $role->slug,
+                    'description' => $role->description,
+                ]);
+            }
+        }
+
+        $user = User::query()->create($data);
         $auditService->record('user_created', "Created user account for {$user->name}.", $user, null, Arr::except($user->toArray(), ['password']));
 
         return redirect()->route('users.show', $user)->with('success', 'User account created successfully.');

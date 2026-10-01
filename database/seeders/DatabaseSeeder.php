@@ -30,9 +30,9 @@ class DatabaseSeeder extends Seeder
         $users = [
             ['System Administrator', 'admin@rhu.test', 'administrator', 'Municipal Health Administrator'],
             ['Dr. Elena Ramos', 'pharmacist@rhu.test', 'pharmacist', 'RHU Pharmacist'],
-            ['Marco Villanueva', 'inventory@rhu.test', 'inventory-staff', 'Inventory Custodian'],
+            ['Marco Villanueva', 'inventory@rhu.test', 'rhu-staff', 'Inventory Custodian'],
             ['Nurse Ana Flores', 'staff@rhu.test', 'rhu-staff', 'Public Health Nurse'],
-            ['RHU Observer', 'viewer@rhu.test', 'viewer', 'Municipal Viewer'],
+            ['RHU Observer', 'viewer@rhu.test', 'rhu-staff', 'Municipal Viewer'],
         ];
 
         foreach ($users as [$name, $email, $role, $jobTitle]) {

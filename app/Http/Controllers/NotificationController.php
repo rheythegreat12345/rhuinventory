@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\InventoryNotification;
 use App\Models\InventoryNotificationRead;
+use App\Services\AlertService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -24,6 +26,32 @@ class NotificationController extends Controller
             ->withQueryString();
 
         return view('notifications.index', compact('notifications', 'status', 'totalCount', 'unreadCount'));
+    }
+
+    public function live(Request $request, AlertService $alertService): JsonResponse
+    {
+        $alertService->syncExpirations();
+
+        $notificationQuery = InventoryNotification::query()->visibleTo($request->user());
+        $notifications = (clone $notificationQuery)
+            ->unreadFor($request->user())
+            ->withReadStateFor($request->user())
+            ->latest()
+            ->limit(6)
+            ->get();
+
+        return response()->json([
+            'unread_count' => (clone $notificationQuery)->unreadFor($request->user())->count(),
+            'notifications' => $notifications->map(fn (InventoryNotification $notification): array => [
+                'id' => $notification->id,
+                'title' => $notification->title,
+                'message' => $notification->message,
+                'level' => $notification->level,
+                'read_url' => route('notifications.read', $notification),
+                'created_at' => $notification->created_at->toIso8601String(),
+                'created_label' => $notification->created_at->diffForHumans(),
+            ])->values(),
+        ]);
     }
 
     public function read(Request $request, InventoryNotification $notification): RedirectResponse

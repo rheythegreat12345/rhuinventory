@@ -17,7 +17,7 @@ class StockAdjustmentSeeder extends Seeder
     public function run(): void
     {
         $batch = MedicineBatch::query()->where('quantity', '>', 20)->first();
-        $user = User::query()->whereHas('role', fn ($query) => $query->where('slug', 'inventory-staff'))->first();
+        $user = User::query()->whereHas('role', fn ($query) => $query->where('slug', 'pharmacist'))->first();
 
         if (! $batch || ! $user) {
             return;

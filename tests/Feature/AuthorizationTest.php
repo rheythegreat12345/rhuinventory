@@ -36,6 +36,26 @@ test('guests are redirected to login', function () {
     $this->get(route('medicines.index'))->assertRedirect(route('login'));
 });
 
+test('read-only staff cannot see or open the barcode scanner', function () {
+    $staff = userWithPermissions(['medicines.view', 'transactions.view', 'reports.view']);
+
+    $this->actingAs($staff)->get(route('scanner'))->assertForbidden();
+    $this->actingAs($staff)->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('href="'.route('scanner').'"', false);
+    $this->actingAs($staff)->get(route('medicines.index'))
+        ->assertOk()
+        ->assertDontSee('href="'.route('scanner').'"', false);
+});
+
+test('authenticated pages are not stored in browser history cache', function () {
+    $staff = userWithPermissions();
+
+    $this->actingAs($staff)->get(route('dashboard'))
+        ->assertOk()
+        ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
+});
+
 test('an administrator can update role permissions', function () {
     $administratorRole = Role::factory()->create(['slug' => 'administrator', 'is_active' => true]);
     $administrator = User::factory()->create(['role_id' => $administratorRole->id]);

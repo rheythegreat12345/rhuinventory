@@ -10,6 +10,12 @@ const applyTheme = (theme) => {
 };
 applyTheme(localStorage.getItem('theme') || document.body?.dataset.defaultTheme || 'system');
 
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        window.location.reload();
+    }
+});
+
 const updateTimeGreetings = (scope = document) => {
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -428,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const search = document.querySelector('[data-global-search]'); const results = document.querySelector('[data-search-results]'); let timer;
     search?.addEventListener('input', () => {
-        clearTimeout(timer); const query = search.value.trim(); if (query.length < 2) { results.hidden = true; return; }
+        clearTimeout(timer); const query = search.value.trim(); if (!query) { results.hidden = true; return; }
         timer = setTimeout(async () => {
             try {
                 const response = await fetch(`${search.dataset.url}?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } });
@@ -442,6 +448,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); search?.focus(); }
         if (event.key === 'Escape') { if (results) results.hidden = true; if (confirmDialog?.open) confirmDialog.close(); }
     });
+
+    const notificationContainer = document.querySelector('[data-live-notifications]');
+    const notificationTrigger = document.querySelector('[data-notification-trigger]');
+    const notificationList = document.querySelector('[data-notification-list]');
+    const notificationCount = document.querySelector('[data-notification-count]');
+    const notificationReadAll = document.querySelector('[data-notification-read-all]');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    let isPollingNotifications = false;
+
+    const renderLiveNotifications = ({ unread_count: unreadCount, notifications }) => {
+        if (!notificationContainer || !notificationTrigger || !notificationList || !notificationCount || !notificationReadAll || !csrfToken) return;
+
+        notificationTrigger.setAttribute('aria-label', `Notifications, ${unreadCount} unread`);
+        notificationTrigger.querySelector('[data-notification-badge]')?.remove();
+        if (unreadCount > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'notification-dot';
+            badge.dataset.notificationBadge = '';
+            badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+            notificationTrigger.append(badge);
+        }
+
+        notificationCount.textContent = `${unreadCount} unread`;
+        notificationReadAll.innerHTML = unreadCount > 0
+            ? `<form method="POST" action="${escapeHtml(notificationContainer.dataset.readAllUrl)}"><input type="hidden" name="_token" value="${escapeHtml(csrfToken)}"><button class="notification-read-all" type="submit">✓ Mark all read</button></form>`
+            : '';
+        notificationList.innerHTML = notifications.length
+            ? notifications.map((notification) => `<form class="notification-menu-form" method="POST" action="${escapeHtml(notification.read_url)}"><input type="hidden" name="_token" value="${escapeHtml(csrfToken)}"><button class="notification-menu-item unread" type="submit"><span class="notification-icon ${escapeHtml(notification.level)}">!</span><span class="notification-copy"><strong>${escapeHtml(notification.title)}</strong><p>${escapeHtml(notification.message)}</p><span class="notification-meta"><time title="${escapeHtml(notification.created_at)}">${escapeHtml(notification.created_label)}</time><span class="notification-unread-mark">Unread</span></span></span></button></form>`).join('')
+            : '<div class="notification-empty"><span class="notification-icon"><span>✓</span></span><strong>Youâ€™re all caught up</strong><p>New inventory alerts will appear here.</p></div>';
+    };
+
+    const pollNotifications = async () => {
+        if (!notificationContainer || isPollingNotifications || document.hidden) return;
+
+        isPollingNotifications = true;
+        try {
+            const response = await fetch(notificationContainer.dataset.url, { headers: { Accept: 'application/json' } });
+            if (response.ok) renderLiveNotifications(await response.json());
+        } finally {
+            isPollingNotifications = false;
+        }
+    };
+
+    if (notificationContainer) {
+        window.setInterval(() => { void pollNotifications(); }, 15000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) void pollNotifications(); });
+    }
 
     document.querySelectorAll('[data-medicine-select]').forEach((select) => {
         const batchSelect = document.querySelector(select.dataset.batchTarget);

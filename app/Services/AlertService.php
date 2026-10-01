@@ -5,11 +5,16 @@ namespace App\Services;
 use App\Models\InventoryNotification;
 use App\Models\Medicine;
 use App\Models\MedicineBatch;
+use App\Models\Setting;
 
 class AlertService
 {
     public function syncMedicine(Medicine $medicine): void
     {
+        if (! Setting::value('notification_low_stock', true)) {
+            return;
+        }
+
         $medicine->loadSum([
             'batches as usable_stock' => fn ($batchQuery) => $batchQuery
                 ->where('status', 'active')
@@ -40,11 +45,16 @@ class AlertService
 
     public function syncExpirations(): void
     {
+        if (! Setting::value('notification_expiration', true)) {
+            return;
+        }
+
+        $warningDays = Setting::value('expiration_warning_days', 90);
         $batches = MedicineBatch::query()
             ->with('medicine')
             ->whereHas('medicine', fn ($medicineQuery) => $medicineQuery->where('status', 'active'))
             ->where('quantity', '>', 0)
-            ->whereDate('expiration_date', '<=', today()->addDays(90))
+            ->whereDate('expiration_date', '<=', today()->addDays($warningDays))
             ->get();
         $activeAlertTypes = $batches->mapWithKeys(function (MedicineBatch $batch): array {
             return [$batch->id => $batch->expiration_date->isBefore(today()) ? 'expired' : 'expiring'];

@@ -23,7 +23,9 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'role_id' => ['required', 'exists:roles,id'],
+            'role_id' => ['nullable', 'required_without:new_role_name', 'integer', 'exists:roles,id'],
+            'new_role_name' => ['nullable', 'required_without:role_id', 'string', 'max:255', 'regex:/[A-Za-z0-9]/'],
+            'new_role_description' => ['nullable', 'string', 'max:1000'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:40'],

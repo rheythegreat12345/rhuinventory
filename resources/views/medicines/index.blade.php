@@ -2,7 +2,7 @@
 @section('title', 'Medicines')
 @section('content')
 <div class="page-header"><div><div class="breadcrumb"><a href="{{ route('dashboard') }}">Dashboard</a><x-icon name="chevron" class="icon-sm" /> Medicines</div><h1 class="page-title">Medicine inventory</h1><p class="page-subtitle">Search, filter, and manage the complete RHU medicine catalog and its live batch stock.</p></div><div class="page-actions">
-    <a class="btn btn-secondary" href="{{ route('scanner') }}"><x-icon name="scan" class="icon-sm" /> Scan</a>
+    @if(auth()->user()->hasPermission('stock.receive'))<a class="btn btn-secondary" href="{{ route('scanner') }}"><x-icon name="scan" class="icon-sm" /> Scan</a>@endif
     <a class="btn btn-secondary" href="{{ route('medicines.export', request()->query()) }}"><x-icon name="download" class="icon-sm" /> Export CSV</a>
     @if(auth()->user()->hasPermission('medicines.create'))<a class="btn btn-primary" href="{{ route('medicines.create') }}"><x-icon name="plus" class="icon-sm" /> Add medicine</a>@endif
 </div></div>

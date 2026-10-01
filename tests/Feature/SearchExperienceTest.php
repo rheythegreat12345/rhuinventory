@@ -36,13 +36,14 @@ test('global search is unavailable to users without medicine viewing permission'
         ->assertForbidden();
 });
 
-test('dashboard keeps statistic text separated without a header search bar', function () {
-    $user = userWithPermissions();
+test('staff with medicine viewing permission have a one-letter live search bar', function () {
+    $user = userWithPermissions(['medicines.view']);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertDontSee('data-live-global-search', false)
+        ->assertSee('data-live-global-search', false)
+        ->assertSee('data-url="'.route('search').'"', false)
         ->assertSee('class="stat-copy"', false)
         ->assertSee('class="stat-value"', false);
 });

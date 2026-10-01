@@ -7,7 +7,7 @@ use App\Models\StorageLocation;
 use App\Models\Supplier;
 
 test('a barcode lookup redirects to the matching medicine without changing its record', function () {
-    $user = userWithPermissions(['medicines.view']);
+    $user = userWithPermissions(['stock.receive']);
     $medicine = Medicine::factory()->create(['barcode' => '4800000000001']);
     $originalMedicine = $medicine->only(['id', 'barcode', 'generic_name', 'medicine_code']);
     $csrfToken = 'barcode-scanner-test-token';
@@ -21,7 +21,7 @@ test('a barcode lookup redirects to the matching medicine without changing its r
 });
 
 test('an unmatched barcode is kept in the scanner field for correction', function () {
-    $user = userWithPermissions(['medicines.view']);
+    $user = userWithPermissions(['stock.receive']);
     $csrfToken = 'barcode-scanner-invalid-test-token';
 
     $this->from(route('scanner'))
@@ -54,7 +54,7 @@ test('a barcode scan can open restock with the matching medicine selected', func
 });
 
 test('a scan-safe EAN-13 label resolves to its invalid legacy demo barcode without changing the database', function () {
-    $user = userWithPermissions(['medicines.view']);
+    $user = userWithPermissions(['stock.receive']);
     $medicine = Medicine::factory()->create(['barcode' => '4801000000004']);
     $csrfToken = 'barcode-scanner-normalized-test-token';
 
@@ -220,7 +220,7 @@ test('restock mode shows the scanned medicine stock and reorder recommendation',
 });
 
 test('scanner dispensing requires a recipient before deducting stock', function () {
-    $user = userWithPermissions(['stock.release']);
+    $user = userWithPermissions(['stock.receive', 'stock.release']);
     $medicine = Medicine::factory()->create(['unit' => 'tablets']);
     $batch = MedicineBatch::factory()->create([
         'medicine_id' => $medicine->id,

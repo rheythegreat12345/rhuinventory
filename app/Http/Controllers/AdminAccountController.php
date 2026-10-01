@@ -6,7 +6,9 @@ use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
@@ -38,8 +40,36 @@ class AdminAccountController extends Controller
         ]);
 
         $user->update(['password' => Hash::make($data['password'])]);
+        $this->endUserSessions($user);
         $auditService->record('admin_password_reset', "Reset password for {$user->name}.", $user);
 
         return back()->with('success', "Password reset for {$user->name}.");
+    }
+
+    public function endSessions(User $user, AuditService $auditService): RedirectResponse
+    {
+        abort_if($user->role?->slug === 'administrator', 403, 'Administrator sessions can only be ended by their owner.');
+
+        $endedSessions = $this->endUserSessions($user);
+        $auditService->record(
+            'admin_sessions_ended',
+            "Ended {$endedSessions} active session(s) for {$user->name}.",
+            $user,
+            null,
+            ['ended_sessions' => $endedSessions],
+        );
+
+        return back()->with('success', "Active sessions ended for {$user->name}.");
+    }
+
+    private function endUserSessions(User $user): int
+    {
+        $endedSessions = DB::table(config('session.table'))
+            ->where('user_id', $user->id)
+            ->delete();
+
+        $user->forceFill(['remember_token' => Str::random(60)])->save();
+
+        return $endedSessions;
     }
 }
