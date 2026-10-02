@@ -145,6 +145,38 @@ test('scanner registration saves a medicine, batch, and transaction together wit
     $this->assertDatabaseHas('inventory_notifications', ['type' => 'stock_received']);
 });
 
+test('scanner registration does not require an existing storage location', function () {
+    $user = userWithPermissions(['medicines.create', 'stock.receive']);
+    $category = MedicineCategory::factory()->create();
+    $supplier = Supplier::factory()->create(['is_active' => true]);
+
+    $this->actingAs($user)
+        ->post(route('scanner.register.store'), [
+            'barcode' => '4800000000013',
+            'generic_name' => 'Medicine Without Storage Setup',
+            'medicine_category_id' => $category->id,
+            'unit' => 'tablets',
+            'quantity' => 12,
+            'expiration_date' => today()->addYear()->toDateString(),
+            'arrival_date' => today()->toDateString(),
+            'supplier_id' => $supplier->id,
+        ])
+        ->assertRedirect()
+        ->assertSessionDoesntHaveErrors();
+
+    $medicine = Medicine::query()->where('barcode', '4800000000013')->firstOrFail();
+
+    $this->assertDatabaseHas('storage_locations', [
+        'code' => 'DEFAULT',
+        'name' => 'Default storage',
+        'is_active' => true,
+    ]);
+    $this->assertDatabaseHas('medicine_batches', [
+        'medicine_id' => $medicine->id,
+        'storage_location_id' => StorageLocation::query()->where('code', 'DEFAULT')->value('id'),
+    ]);
+});
+
 test('scanner registration derives a safe target stock level from the minimum stock level', function () {
     $user = userWithPermissions(['medicines.create', 'stock.receive']);
     $category = MedicineCategory::factory()->create();

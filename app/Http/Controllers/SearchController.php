@@ -16,7 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SearchController extends Controller
@@ -153,16 +152,7 @@ class SearchController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        $data['storage_location_id'] = StorageLocation::query()
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->value('id');
-
-        if ($data['storage_location_id'] === null) {
-            throw ValidationException::withMessages([
-                'storage_location_id' => 'Add an active storage location before registering stock.',
-            ]);
-        }
+        $data['storage_location_id'] = $this->registrationStorageLocationId();
 
         $data['maximum_stock_level'] = max(100, (int) ($data['minimum_stock_level'] ?? 10));
 
@@ -305,5 +295,26 @@ class SearchController extends Controller
             'reference_number' => 'SCANNER-'.Str::upper((string) Str::ulid()),
             'remarks' => $remarks,
         ], $user);
+    }
+
+    private function registrationStorageLocationId(): int
+    {
+        $location = StorageLocation::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->first();
+
+        if ($location) {
+            return $location->id;
+        }
+
+        return StorageLocation::query()->firstOrCreate(
+            ['code' => 'DEFAULT'],
+            [
+                'name' => 'Default storage',
+                'description' => 'Created automatically for scanner medicine registrations.',
+                'is_active' => true,
+            ],
+        )->id;
     }
 }
