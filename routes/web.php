@@ -65,6 +65,7 @@ Route::middleware(['auth', 'cache.headers:private;no_cache;no_store;must_revalid
 
     Route::middleware('permission:medicines.view')->group(function (): void {
         Route::get('/medicines', [MedicineController::class, 'index'])->name('medicines.index');
+        Route::get('/medicines/archived', [MedicineController::class, 'archived'])->name('medicines.archived');
         Route::get('/medicines/export/csv', [MedicineController::class, 'export'])->name('medicines.export');
         Route::get('/medicines/import/template', [MedicineController::class, 'template'])->name('medicines.template');
         Route::get('/medicines/{medicine}', [MedicineController::class, 'show'])->name('medicines.show');
@@ -77,6 +78,7 @@ Route::middleware(['auth', 'cache.headers:private;no_cache;no_store;must_revalid
     Route::middleware('permission:medicines.edit')->group(function (): void {
         Route::delete('/medicines/bulk', [MedicineController::class, 'bulkArchive'])->name('medicines.bulk-archive');
         Route::get('/medicines/{medicine}/edit', [MedicineController::class, 'edit'])->name('medicines.edit');
+        Route::patch('/medicines/{medicineId}/restore', [MedicineController::class, 'restore'])->name('medicines.restore');
         Route::put('/medicines/{medicine}', [MedicineController::class, 'update'])->name('medicines.update');
         Route::delete('/medicines/{medicine}', [MedicineController::class, 'destroy'])->name('medicines.destroy');
     });

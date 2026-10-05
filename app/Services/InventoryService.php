@@ -107,6 +107,7 @@ class InventoryService
             $requestedQuantity = (int) $data['quantity'];
             $remaining = $requestedQuantity;
             $transactions = collect();
+            $transactionType = TransactionType::from($data['type']);
 
             $batches = MedicineBatch::query()
                 ->where('medicine_id', $medicine->id)
@@ -142,7 +143,7 @@ class InventoryService
                 $transactions->push($this->createTransaction(
                     $batch->fresh(),
                     $user,
-                    TransactionType::from($data['type']),
+                    $transactionType,
                     $deduction,
                     $previousStock,
                     $data,
@@ -151,7 +152,35 @@ class InventoryService
             }
 
             $batchList = $transactions->pluck('batch.batch_number')->filter()->join(', ');
-            $this->auditService->record('stock_out', "Released {$requestedQuantity} {$medicine->unit} of {$medicine->generic_name} using FEFO batches: {$batchList}.", $medicine);
+            $firstTransaction = $transactions->first();
+
+            $this->auditService->record(
+                'stock_out',
+                "Released {$requestedQuantity} {$medicine->unit} of {$medicine->generic_name} using FEFO batches: {$batchList}.",
+                $medicine,
+                [
+                    'available_stock' => $availableQuantity,
+                    'quantity_released' => 0,
+                ],
+                [
+                    'available_stock' => $availableQuantity - $requestedQuantity,
+                    'quantity_released' => $requestedQuantity,
+                    'purpose' => $data['purpose'],
+                    'recipient' => $data['recipient'] ?? null,
+                ],
+            );
+
+            InventoryNotification::query()->create([
+                'type' => $transactionType === TransactionType::Dispensed ? 'medicine_dispensed' : 'stock_released',
+                'title' => $transactionType === TransactionType::Dispensed ? 'Medicine dispensed' : 'Stock released',
+                'message' => "Released {$requestedQuantity} {$medicine->unit} of {$medicine->generic_name}. ".($availableQuantity - $requestedQuantity)." usable {$medicine->unit} remain.",
+                'level' => 'info',
+                'data' => [
+                    'medicine_id' => $medicine->id,
+                    'transaction_id' => $firstTransaction->id,
+                    'url' => route('transactions.index', ['search' => $firstTransaction->transaction_code], false),
+                ],
+            ]);
             $this->alertService->syncMedicine($medicine);
 
             return $transactions;

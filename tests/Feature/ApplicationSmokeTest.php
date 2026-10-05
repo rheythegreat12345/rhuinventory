@@ -1,11 +1,13 @@
 <?php
 
+use App\Models\InventoryTransaction;
 use App\Models\Medicine;
 use App\Models\MedicineBatch;
 use App\Models\StorageLocation;
 use App\Models\Supplier;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Support\Facades\Schema;
 
 test('the seeded application pages render for an administrator', function () {
     $this->seed(DatabaseSeeder::class);
@@ -89,6 +91,22 @@ test('the dashboard treats expired stock as unavailable', function () {
         ->assertOk()
         ->assertSee('Expired Dashboard Medicine')
         ->assertSee('0 tablets left');
+});
+
+test('the dashboard renders transactions whose medicine is no longer available', function () {
+    $user = userWithPermissions();
+    $medicine = Medicine::factory()->create();
+    $transaction = InventoryTransaction::factory()->create(['medicine_id' => $medicine->id]);
+
+    Schema::disableForeignKeyConstraints();
+    $medicine->delete();
+    Schema::enableForeignKeyConstraints();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee($transaction->transaction_code)
+        ->assertSee('Unavailable medicine');
 });
 
 test('the dashboard and expiration monitor exclude archived medicines', function () {

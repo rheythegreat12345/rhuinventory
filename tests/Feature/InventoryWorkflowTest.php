@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\InventoryTransaction;
 use App\Models\Medicine;
 use App\Models\MedicineBatch;
@@ -236,6 +237,22 @@ test('stock out uses FEFO and never consumes expired batches', function () {
         ->and($later->fresh()->quantity)->toBe(7)
         ->and($expired->fresh()->quantity)->toBe(50)
         ->and(InventoryTransaction::query()->where('type', 'dispensed')->count())->toBe(2);
+
+    $auditLog = AuditLog::query()->where('action', 'stock_out')->firstOrFail();
+
+    expect($auditLog->old_values)->toMatchArray([
+        'available_stock' => 15,
+        'quantity_released' => 0,
+    ])->and($auditLog->new_values)->toMatchArray([
+        'available_stock' => 7,
+        'quantity_released' => 8,
+        'purpose' => 'Patient dispensing',
+        'recipient' => 'Ana Cruz',
+    ]);
+    $this->assertDatabaseHas('inventory_notifications', [
+        'type' => 'medicine_dispensed',
+        'title' => 'Medicine dispensed',
+    ]);
 });
 
 test('stock out form shows only essential release fields', function () {

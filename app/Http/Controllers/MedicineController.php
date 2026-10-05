@@ -34,6 +34,26 @@ class MedicineController extends Controller
             'categories' => MedicineCategory::query()->where('is_active', true)->orderBy('name')->get(),
             'suppliers' => Supplier::query()->where('is_active', true)->orderBy('name')->get(),
             'locations' => StorageLocation::query()->where('is_active', true)->orderBy('name')->get(),
+            'showArchived' => false,
+        ]);
+    }
+
+    /**
+     * Display archived medicine records.
+     */
+    public function archived(Request $request): View
+    {
+        $medicines = $this->filteredQuery($request, true)
+            ->reorder('deleted_at', 'desc')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('medicines.index', [
+            'medicines' => $medicines,
+            'categories' => MedicineCategory::query()->where('is_active', true)->orderBy('name')->get(),
+            'suppliers' => Supplier::query()->where('is_active', true)->orderBy('name')->get(),
+            'locations' => StorageLocation::query()->where('is_active', true)->orderBy('name')->get(),
+            'showArchived' => true,
         ]);
     }
 
@@ -140,6 +160,29 @@ class MedicineController extends Controller
         $count = $medicines->count();
 
         return back()->with('success', "Archived {$count} ".str('medicine')->plural($count).'. Their transaction history was preserved.');
+    }
+
+    /**
+     * Restore an archived medicine to the active inventory catalog.
+     */
+    public function restore(int $medicineId, AuditService $auditService): RedirectResponse
+    {
+        $medicine = Medicine::onlyTrashed()->findOrFail($medicineId);
+        $previousStatus = $medicine->status;
+
+        DB::transaction(function () use ($auditService, $medicine, $previousStatus): void {
+            $medicine->restore();
+            $medicine->update(['status' => 'active']);
+            $auditService->record(
+                'medicine_restored',
+                "Restored medicine {$medicine->generic_name} to active inventory.",
+                $medicine,
+                ['status' => $previousStatus],
+                ['status' => 'active'],
+            );
+        });
+
+        return redirect()->route('medicines.index')->with('success', "{$medicine->generic_name} was restored to active inventory.");
     }
 
     public function export(Request $request): StreamedResponse
@@ -250,11 +293,14 @@ class MedicineController extends Controller
         return back()->with('success', "Imported or updated {$count} medicine records.");
     }
 
-    private function filteredQuery(Request $request): Builder
+    private function filteredQuery(Request $request, bool $showArchived = false): Builder
     {
         $today = today()->toDateString();
         $stockExpression = "(SELECT COALESCE(SUM(medicine_batches.quantity), 0) FROM medicine_batches WHERE medicine_batches.medicine_id = medicines.id AND medicine_batches.status = 'active' AND DATE(medicine_batches.expiration_date) >= '{$today}')";
-        $query = Medicine::query()->with('category')->withInventory()->search($request->string('search')->toString());
+        $query = ($showArchived ? Medicine::onlyTrashed() : Medicine::query())
+            ->with('category')
+            ->withInventory()
+            ->search($request->string('search')->toString());
 
         $query->when($request->integer('category'), fn (Builder $builder, int $categoryId) => $builder->where('medicine_category_id', $categoryId))
             ->when($request->integer('supplier'), fn (Builder $builder, int $supplierId) => $builder->whereHas('batches', fn (Builder $batchQuery) => $batchQuery->where('supplier_id', $supplierId)))

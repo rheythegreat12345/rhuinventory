@@ -69,7 +69,7 @@
                 <div class="global-search">
                     <label class="global-search-label" for="live-global-search">Live medicine search</label>
                     <div class="global-search-control">
-                        <x-icon name="search" class="icon-sm" />
+                        <x-icon name="search" />
                         <input id="live-global-search" type="search" autocomplete="off" placeholder="Search medicines, batches, or suppliers..." data-live-global-search data-url="{{ route('search') }}" aria-controls="live-search-results" aria-expanded="false">
                         <span class="search-shortcut">Ctrl K</span>
                     </div>

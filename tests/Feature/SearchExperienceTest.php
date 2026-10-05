@@ -44,6 +44,7 @@ test('staff with medicine viewing permission have a one-letter live search bar',
         ->assertOk()
         ->assertSee('data-live-global-search', false)
         ->assertSee('data-url="'.route('search').'"', false)
+        ->assertSee("<div class=\"global-search-control\">\n                        <svg class=\"icon\"", false)
         ->assertSee('class="stat-copy"', false)
         ->assertSee('class="stat-value"', false);
 });

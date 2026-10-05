@@ -98,6 +98,56 @@ test('authorized staff can archive selected medicines together', function () {
     });
 });
 
+test('authorized staff can view archived medicines', function () {
+    $user = userWithPermissions(['medicines.view']);
+    $archivedMedicine = Medicine::factory()->create(['generic_name' => 'Archived Medicine']);
+    $activeMedicine = Medicine::factory()->create(['generic_name' => 'Active Medicine']);
+
+    $archivedMedicine->update(['status' => 'archived']);
+    $archivedMedicine->delete();
+
+    $this->actingAs($user)
+        ->get(route('medicines.index'))
+        ->assertOk()
+        ->assertSee(route('medicines.archived'), false);
+
+    $this->actingAs($user)
+        ->get(route('medicines.archived'))
+        ->assertOk()
+        ->assertSee('Archived medicines')
+        ->assertSee('Archived Medicine')
+        ->assertDontSee('Active Medicine')
+        ->assertSee('Active medicines');
+});
+
+test('authorized staff can restore an archived medicine to active inventory', function () {
+    $user = userWithPermissions(['medicines.view', 'medicines.edit']);
+    $medicine = Medicine::factory()->create(['generic_name' => 'Restore Medicine']);
+
+    $medicine->update(['status' => 'archived']);
+    $medicine->delete();
+
+    $this->actingAs($user)
+        ->patch(route('medicines.restore', $medicine->id))
+        ->assertRedirect(route('medicines.index'))
+        ->assertSessionHas('success', 'Restore Medicine was restored to active inventory.');
+
+    $this->assertDatabaseHas('medicines', [
+        'id' => $medicine->id,
+        'status' => 'active',
+        'deleted_at' => null,
+    ]);
+    $this->assertDatabaseHas('audit_logs', [
+        'action' => 'medicine_restored',
+        'auditable_id' => $medicine->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('medicines.index'))
+        ->assertOk()
+        ->assertSee('Restore Medicine');
+});
+
 test('a medicine page shows a scan-ready barcode preview', function () {
     $user = userWithPermissions(['medicines.view', 'stock.receive']);
     $medicine = Medicine::factory()->create(['barcode' => '4801000000009']);
